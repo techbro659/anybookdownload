@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🤖 Telegram-Only gyan book world Bot
+🤖 Telegram-Only Gyan Book World
 - Searches across multiple open-source book websites
 - Sends PDF directly in Telegram chat (no external links)
 - Everything stays inside Telegram
@@ -108,7 +108,7 @@ def search_archive(query: str) -> list[dict]:
                 "author": creator if isinstance(creator, str) else ", ".join(creator) if creator else "Unknown",
                 "source": "Archive.org",
                 "pdf_url": pdf_url,
-                "file_size": "~2-100MB"
+                "file_size": "~1-100MB"
             })
             if len(results) >= 5:
                 break
@@ -202,24 +202,75 @@ def extract_manybooks_pdf(book_url: str) -> str | None:
 # ─── COMBINED SEARCH ──────────────────────────────────────────────────────────
 
 def combined_search(query: str) -> list[dict]:
-    """Search all sources and return unique PDF results."""
+    """Search all sources and return unique PDF results. Falls back to Google filetype:pdf if needed."""
     all_results = []
     all_results += search_gutenberg(query)
     all_results += search_archive(query)
     all_results += search_pdfdrive(query)
     all_results += search_manybooks(query)
+
+    # Deduplicate
     unique = []
     seen_urls = set()
     for res in all_results:
         if res["pdf_url"] and res["pdf_url"] not in seen_urls:
             seen_urls.add(res["pdf_url"])
             unique.append(res)
+
+    # Fallback: if less than 3 results, try Google filetype:pdf search
+    if len(unique) < 3:
+        logger.info(f"Only {len(unique)} results found, trying Google filetype:pdf fallback...")
+        google_results = search_google_filetype_pdf(query)
+        for res in google_results:
+            if res["pdf_url"] not in seen_urls:
+                seen_urls.add(res["pdf_url"])
+                unique.append(res)
+
     return unique[:10]
+
+
+# ─── GOOGLE FILETYPE FALLBACK ────────────────────────────────────────────────
+
+def search_google_filetype_pdf(query: str) -> list[dict]:
+    """
+    Fallback: Google search with filetype:pdf "query".
+    Scrapes top direct .pdf links from search results.
+    """
+    results = []
+    try:
+        search_query = f'filetype:pdf "{query}"'
+        url = f"https://www.google.com/search?q={urllib.parse.quote_plus(search_query)}&num=10"
+        r = requests.get(url, headers=HEADERS, timeout=10)
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        seen = set()
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"]
+            # Google wraps URLs in /url?q=...
+            if href.startswith("/url?q="):
+                href = urllib.parse.unquote(href[7:].split("&")[0])
+            if href.lower().endswith(".pdf") and href.startswith("http") and href not in seen:
+                seen.add(href)
+                # Try to get a readable title from link text or URL
+                link_text = a_tag.get_text(strip=True)
+                title = link_text if link_text and len(link_text) > 5 else href.split("/")[-1].replace(".pdf", "").replace("-", " ").replace("_", " ")
+                results.append({
+                    "title": title[:80],
+                    "author": "Google Search",
+                    "source": "Web (Google)",
+                    "pdf_url": href,
+                    "file_size": "Unknown"
+                })
+            if len(results) >= 5:
+                break
+    except Exception as e:
+        logger.warning(f"Google filetype search failed: {e}")
+    return results
 
 
 # ─── PDF DOWNLOADER ───────────────────────────────────────────────────────────
 
-def download_pdf(url: str, max_mb: int = 100) -> bytes | None:
+def download_pdf(url: str, max_mb: int = 15) -> bytes | None:
     """Download PDF if valid and under size limit."""
     if not url:
         return None
@@ -292,7 +343,7 @@ def build_book_keyboard(book_idx: int) -> InlineKeyboardMarkup:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
-        "🔍 *Telegram gyan book world Bot*\n\n"
+        "🔍 *Telegram Gyan Book World*\n\n"
         "I search *multiple open-source websites* for PDF books and send them directly in this chat.\n\n"
         "📌 *How to use:*\n"
         "Send me a book title or author name.\n"
@@ -317,7 +368,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "3️⃣ Results appear as inline buttons.\n"
         "4️⃣ Tap a book → tap *Download PDF (Telegram)*.\n"
         "5️⃣ The PDF file is sent *directly in this chat* — no external links.\n\n"
-        "⚠️ *Note:* Max file size is 100MB."
+        "⚠️ *Note:* Max file size is 15MB."
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -354,7 +405,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     msg = await update.message.reply_text(
-        f"🔍 Searching *{query}* across open-source sites...", parse_mode="Markdown"
+        f"🔍 Searching *{query}* across open-source sites...\n_If not found, will try Google filetype:pdf fallback_ 🌐",
+        parse_mode="Markdown"
     )
     results = combined_search(query)
     context.user_data["last_results"] = results
@@ -453,7 +505,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await msg.edit_text(
                 "⚠️ PDF download failed.\n\n"
                 "Possible reasons:\n"
-                "• File size >100MB\n"
+                "• File size >15MB\n"
                 "• Source site blocked the request\n"
                 "• File moved or deleted\n\n"
                 "💡 Try another book from the list.",
@@ -483,7 +535,7 @@ def main() -> None:
         print("   export TELEGRAM_BOT_TOKEN='your_token_here'")
         return
 
-    print("🤖 Telegram Gyan book world Bot starting...")
+    print("🤖 Telegram Gyan Book World starting...")
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
