@@ -53,7 +53,7 @@ def search_gutenberg(query: str) -> list[dict]:
                     "author": ", ".join(a["name"] for a in book.get("authors", [])),
                     "source": "Project Gutenberg",
                     "pdf_url": pdf_url,
-                    "file_size": "~1-5MB"
+                    "file_size": "~1-100MB"
                 })
     except Exception as e:
         logger.warning(f"Gutenberg search failed: {e}")
@@ -108,7 +108,7 @@ def search_archive(query: str) -> list[dict]:
                 "author": creator if isinstance(creator, str) else ", ".join(creator) if creator else "Unknown",
                 "source": "Archive.org",
                 "pdf_url": pdf_url,
-                "file_size": "~2-10MB"
+                "file_size": "~2-100MB"
             })
             if len(results) >= 5:
                 break
@@ -139,7 +139,7 @@ def search_pdfdrive(query: str) -> list[dict]:
                         "author": "PDF Drive",
                         "source": "PDF Drive",
                         "pdf_url": pdf_url,
-                        "file_size": "~1-10MB"
+                        "file_size": "~1-100MB"
                     })
     except Exception as e:
         logger.warning(f"PDF Drive search failed: {e}")
@@ -179,7 +179,7 @@ def search_manybooks(query: str) -> list[dict]:
                     "author": "ManyBooks",
                     "source": "ManyBooks.net",
                     "pdf_url": pdf_url,
-                    "file_size": "~1-5MB"
+                    "file_size": "~1-100MB"
                 })
     except Exception as e:
         logger.warning(f"ManyBooks search failed: {e}")
@@ -219,7 +219,7 @@ def combined_search(query: str) -> list[dict]:
 
 # ─── PDF DOWNLOADER ───────────────────────────────────────────────────────────
 
-def download_pdf(url: str, max_mb: int = 15) -> bytes | None:
+def download_pdf(url: str, max_mb: int = 100) -> bytes | None:
     """Download PDF if valid and under size limit."""
     if not url:
         return None
@@ -292,7 +292,7 @@ def build_book_keyboard(book_idx: int) -> InlineKeyboardMarkup:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
-        "🔍 *Telegram PDF gyan book world Bot*\n\n"
+        "🔍 *Telegram gyan book world Bot*\n\n"
         "I search *multiple open-source websites* for PDF books and send them directly in this chat.\n\n"
         "📌 *How to use:*\n"
         "Send me a book title or author name.\n"
@@ -483,7 +483,7 @@ def main() -> None:
         print("   export TELEGRAM_BOT_TOKEN='your_token_here'")
         return
 
-    print("🤖 Telegram PDF Gyan book world Bot starting...")
+    print("🤖 Telegram Gyan book world Bot starting...")
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
