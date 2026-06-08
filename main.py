@@ -60,6 +60,31 @@ def search_gutenberg(query: str) -> list[dict]:
     return results
 
 
+def get_archive_pdf_url(identifier: str) -> str | None:
+    """Get actual PDF download URL from Archive.org item metadata."""
+    try:
+        meta_url = f"https://archive.org/metadata/{identifier}"
+        r = requests.get(meta_url, headers=HEADERS, timeout=10)
+        data = r.json()
+        files = data.get("files", [])
+        # Prefer smaller PDFs first
+        pdf_files = [f for f in files if f.get("name", "").lower().endswith(".pdf")]
+        if not pdf_files:
+            return None
+        # Sort by size ascending, pick smallest
+        def safe_size(f):
+            try:
+                return int(f.get("size", 999999999))
+            except Exception:
+                return 999999999
+        pdf_files.sort(key=safe_size)
+        best = pdf_files[0]["name"]
+        return f"https://archive.org/download/{identifier}/{urllib.parse.quote(best)}"
+    except Exception as e:
+        logger.warning(f"Archive metadata failed for {identifier}: {e}")
+    return None
+
+
 def search_archive(query: str) -> list[dict]:
     """Search Archive.org."""
     results = []
@@ -67,15 +92,17 @@ def search_archive(query: str) -> list[dict]:
         url = (
             f"https://archive.org/advancedsearch.php"
             f"?q={urllib.parse.quote_plus(query)}+AND+mediatype:texts"
-            f"&fl[]=identifier,title,creator&sort[]=&sort[]=&sort[]=&rows=5&output=json"
+            f"&fl[]=identifier,title,creator,size&sort[]=downloads+desc&rows=8&output=json"
         )
         r = requests.get(url, headers=HEADERS, timeout=10)
         data = r.json()
-        for doc in data.get("response", {}).get("docs", [])[:5]:
+        for doc in data.get("response", {}).get("docs", [])[:8]:
             identifier = doc.get("identifier", "")
             title = doc.get("title", "Unknown")[:100]
             creator = doc.get("creator", "Unknown")
-            pdf_url = f"https://archive.org/download/{identifier}/{identifier}.pdf"
+            pdf_url = get_archive_pdf_url(identifier)
+            if not pdf_url:
+                continue
             results.append({
                 "title": title,
                 "author": creator if isinstance(creator, str) else ", ".join(creator) if creator else "Unknown",
@@ -83,6 +110,8 @@ def search_archive(query: str) -> list[dict]:
                 "pdf_url": pdf_url,
                 "file_size": "~2-10MB"
             })
+            if len(results) >= 5:
+                break
     except Exception as e:
         logger.warning(f"Archive search failed: {e}")
     return results
@@ -192,23 +221,45 @@ def combined_search(query: str) -> list[dict]:
 
 def download_pdf(url: str, max_mb: int = 15) -> bytes | None:
     """Download PDF if valid and under size limit."""
-    if not url or not url.lower().endswith(".pdf"):
+    if not url:
         return None
     try:
-        r = requests.get(url, headers=HEADERS, timeout=20, stream=True)
-        ct = r.headers.get("Content-Type", "")
-        if "pdf" not in ct.lower() and not url.endswith(".pdf"):
+        r = requests.get(
+            url, headers=HEADERS, timeout=30,
+            stream=True, allow_redirects=True
+        )
+        if r.status_code != 200:
+            logger.warning(f"PDF download HTTP {r.status_code} for {url}")
             return None
+
+        ct = r.headers.get("Content-Type", "").lower()
+        final_url = r.url.lower()
+
+        # Accept if content-type is PDF or URL ends with .pdf
+        is_pdf_ct = "pdf" in ct or "octet-stream" in ct
+        is_pdf_url = final_url.endswith(".pdf")
+        if not is_pdf_ct and not is_pdf_url:
+            logger.warning(f"Non-PDF content-type '{ct}' for {url}")
+            return None
+
+        # Check size from header
         size = int(r.headers.get("Content-Length", 0))
         if size > max_mb * 1024 * 1024:
+            logger.warning(f"PDF too large ({size} bytes) for {url}")
             return None
+
         data = b""
         for chunk in r.iter_content(chunk_size=8192):
             data += chunk
             if len(data) > max_mb * 1024 * 1024:
+                logger.warning(f"PDF exceeded {max_mb}MB while downloading {url}")
                 return None
+
+        # Verify PDF magic number
         if data[:4] == b"%PDF":
             return data
+        else:
+            logger.warning(f"No PDF magic number in response from {url}")
     except Exception as e:
         logger.warning(f"PDF download failed for {url}: {e}")
     return None
@@ -400,9 +451,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await msg.delete()
         else:
             await msg.edit_text(
-                "⚠️ Could not download PDF.\n"
-                "File may be too large (>15MB) or unavailable.\n"
-                "Try another book.",
+                "⚠️ PDF download failed.\n\n"
+                "Possible reasons:\n"
+                "• File size >15MB\n"
+                "• Source site blocked the request\n"
+                "• File moved or deleted\n\n"
+                "💡 Try another book from the list.",
             )
 
     elif data == "back":
