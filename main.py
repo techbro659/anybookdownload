@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🤖 Telegram-Only PDF Hunter Bot
+🤖 Telegram-Only gyan book world Bot
 - Searches across multiple open-source book websites
 - Sends PDF directly in Telegram chat (no external links)
 - Everything stays inside Telegram
@@ -292,7 +292,7 @@ def build_book_keyboard(book_idx: int) -> InlineKeyboardMarkup:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
-        "🔍 *Telegram PDF Hunter Bot*\n\n"
+        "🔍 *Telegram PDF gyan book world Bot*\n\n"
         "I search *multiple open-source websites* for PDF books and send them directly in this chat.\n\n"
         "📌 *How to use:*\n"
         "Send me a book title or author name.\n"
@@ -483,7 +483,7 @@ def main() -> None:
         print("   export TELEGRAM_BOT_TOKEN='your_token_here'")
         return
 
-    print("🤖 Telegram PDF Hunter Bot starting...")
+    print("🤖 Telegram PDF Gyan book world Bot starting...")
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
