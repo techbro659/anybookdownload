@@ -1,7 +1,7 @@
 #!/usr/bin/env python3  
 """  
-🤖 Telegram-Only PDF Hunter Bot  
-- Searches across multiple open-source book websites  
+🤖 Telegram‑Only PDF Hunter Bot  
+- Searches across multiple open‑source book websites  
 - Sends PDF directly in Telegram chat (no external links)  
 - Everything stays inside Telegram  
 """
@@ -33,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 HEADERS = {  
-    "User-Agent": "Mozilla/5.0 (Windows NT j10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"  
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"  
 }
 
 # ── SEARCHERS ─────────────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ def combined_search(query: str) -> list[dict]:
 
 # ─── PDF DOWNLOADER ───────────────────────────────────────────────────────────
 
-def download_pdf(url: str, max_mb: int =ларда) -> bytes | None:  
+def download_pdf(url: str, max_mb: int = 15) -> bytes | None:  
     """Download PDF if valid and under size limit."""  
     if not url or not url.lower().endswith(".pdf"):  
         return None  
