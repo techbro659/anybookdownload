@@ -216,23 +216,24 @@ def download_pdf(url: str, max_mb: int = 15) -> bytes | None:
 
 # ─── KEYBOARD ─────────────────────────────────────────────────────────────────
 
-def build_results_keyboard(results: list[dict], query: str) -> InlineKeyboardMarkup:
+def build_results_keyboard(results: list[dict]) -> InlineKeyboardMarkup:
     """Build inline keyboard from search results."""
     buttons = []
     for i, book in enumerate(results[:8]):
         label = f"📘 {book['title'][:30]}"
         if len(book['title']) > 30:
             label += "..."
-        buttons.append([InlineKeyboardButton(label, callback_data=f"book:{i}:{query}")])
+        # Use short index only — max 64 bytes limit on callback_data
+        buttons.append([InlineKeyboardButton(label, callback_data=f"book:{i}")])
     return InlineKeyboardMarkup(buttons)
 
 
-def build_book_keyboard(book: dict) -> InlineKeyboardMarkup:
+def build_book_keyboard(book_idx: int) -> InlineKeyboardMarkup:
     """Keyboard for single book."""
-    buttons = []
-    if book.get("pdf_url"):
-        buttons.append([InlineKeyboardButton("⬇️ Download PDF (Telegram)", callback_data=f"dl:{book['pdf_url']}")])
-    buttons.append([InlineKeyboardButton("🔙 Back to Results", callback_data="back")])
+    buttons = [
+        [InlineKeyboardButton("⬇️ Download PDF (Telegram)", callback_data=f"dl:{book_idx}")],
+        [InlineKeyboardButton("🔙 Back to Results", callback_data="back")],
+    ]
     return InlineKeyboardMarkup(buttons)
 
 
@@ -322,7 +323,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await msg.edit_text(
         "\n".join(lines) + "\n\n👇 *Tap a book to download inside Telegram:*",
         parse_mode="Markdown",
-        reply_markup=build_results_keyboard(results, query),
+        reply_markup=build_results_keyboard(results),
     )
 
 
@@ -351,14 +352,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await q.message.reply_text(
             "\n".join(lines) + "\n\n👇 *Tap a book:*",
             parse_mode="Markdown",
-            reply_markup=build_results_keyboard(results, query),
+            reply_markup=build_results_keyboard(results),
         )
 
     elif data.startswith("book:"):
-        _, idx, query = data.split(":", 2)
+        idx = int(data.split(":")[1])
         results = context.user_data.get("last_results", [])
         try:
-            book = results[int(idx)]
+            book = results[idx]
         except (IndexError, ValueError):
             await q.message.reply_text("⚠️ Result expired. Search again.")
             return
@@ -375,11 +376,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await q.message.reply_text(
             text,
             parse_mode="Markdown",
-            reply_markup=build_book_keyboard(book),
+            reply_markup=build_book_keyboard(idx),
         )
 
     elif data.startswith("dl:"):
-        pdf_url = data[3:]
+        idx = int(data.split(":")[1])
+        results = context.user_data.get("last_results", [])
+        try:
+            book = results[idx]
+            pdf_url = book["pdf_url"]
+        except (IndexError, KeyError):
+            await q.message.reply_text("⚠️ Result expired. Search again.")
+            return
         msg = await q.message.reply_text("⬇️ Downloading PDF inside Telegram... ⏳")
         pdf_bytes = download_pdf(pdf_url)
         if pdf_bytes:
@@ -409,7 +417,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await q.message.reply_text(
             "\n".join(lines) + "\n\n👇 *Tap a book:*",
             parse_mode="Markdown",
-            reply_markup=build_results_keyboard(results, query),
+            reply_markup=build_results_keyboard(results),
         )
 
 
