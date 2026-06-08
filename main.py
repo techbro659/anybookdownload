@@ -317,7 +317,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "3️⃣ Results appear as inline buttons.\n"
         "4️⃣ Tap a book → tap *Download PDF (Telegram)*.\n"
         "5️⃣ The PDF file is sent *directly in this chat* — no external links.\n\n"
-        "⚠️ *Note:* Max file size is 15MB."
+        "⚠️ *Note:* Max file size is 100MB."
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -453,7 +453,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await msg.edit_text(
                 "⚠️ PDF download failed.\n\n"
                 "Possible reasons:\n"
-                "• File size >15MB\n"
+                "• File size >100MB\n"
                 "• Source site blocked the request\n"
                 "• File moved or deleted\n\n"
                 "💡 Try another book from the list.",
